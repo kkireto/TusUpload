@@ -69,7 +69,7 @@
 }
 
 - (void)startUploadForURL:(NSURL*)assetURL {
-    if (_assetsLibrary) {
+    if (!_assetsLibrary) {
         _assetsLibrary = [[ALAssetsLibrary alloc] init];
     }
     [_assetsLibrary assetForURL:assetURL resultBlock: ^(ALAsset *asset){
