@@ -9,6 +9,7 @@
 
 #import <AssetsLibrary/AssetsLibrary.h>
 
+#import "ALAssetsLibraryManager.h"
 #import "ALAssetObject.h"
 #import "CustomALAssetImageView.h"
 #import "ALAssetCollectionViewCell.h"
@@ -17,7 +18,7 @@
 
 @interface AssetsLibraryViewController ()
 
-@property (nonatomic,strong) NSMutableArray *assetsArray;
+@property (nonatomic,strong) NSArray *assetsArray;
 @property (nonatomic,strong) ALAssetsLibrary *assetslibrary;
 
 @end
@@ -56,29 +57,25 @@
 #pragma mark - load assets from library
 - (void)loadAssetsFromLibrary {
     
-    if (!_assetsArray) {
-        _assetsArray = [[NSMutableArray alloc] init];
-    }
-    else {
-        [_assetsArray removeAllObjects];
-    }
+    _assetsArray = nil;
     if (!_assetslibrary) {
         _assetslibrary = [[ALAssetsLibrary alloc] init];
     }
-    [_assetslibrary enumerateGroupsWithTypes:ALAssetsGroupAll usingBlock:^(ALAssetsGroup *group, BOOL *stop) {
-        if (group) {
-            [group enumerateAssetsUsingBlock:^(ALAsset *asset, NSUInteger index, BOOL *stop) {
-                if (asset){
-                    ALAssetObject *assetObject = [[ALAssetObject alloc] initWithALAsset:asset];
-                    [_assetsArray insertObject:assetObject atIndex:0];
-                    [_collectionView reloadData];
-                    assetObject = nil;
-                }
-            }];
-        }
-    } failureBlock:^(NSError *error) {
-        NSLog(@"error enumerating AssetLibrary groups %@\n", error);
-    }];
+    [ALAssetsLibraryManager loadAssetsFromLibrary:_assetslibrary
+                                  successCallback:^(NSArray *assetsArray) {
+                                      
+                                      _assetsArray = assetsArray;
+                                      [_collectionView reloadData];
+                                      
+                                  } errorCallback:^(NSString *errorMessage) {
+                                      
+                                      UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@""
+                                                                                          message:errorMessage
+                                                                                         delegate:nil
+                                                                                cancelButtonTitle:@"Ok"
+                                                                                otherButtonTitles:nil];
+                                      [alertView show];
+                                  }];
 }
 
 #pragma mark - UICollectionView

@@ -108,89 +108,83 @@
 
 - (void)createFile {
     
-    NSDictionary *headers = [NSDictionary dictionaryWithObjectsAndKeys:
-                             [NSString stringWithFormat:@"%llu", _assetDataLength], HTTP_FINAL_LENGTH,
-                             @"0", @"Content-Length", nil];
-    
-    AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:UPLOAD_URL]];
-    NSMutableURLRequest *afRequest = [httpClient requestWithMethod:HTTP_POST path:UPLOAD_URL parameters:nil];
-    [afRequest setTimeoutInterval:REQUEST_TIMEOUT];
-    [afRequest setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
-    [afRequest setHTTPShouldHandleCookies:NO];
-    [afRequest setAllHTTPHeaderFields:headers];
-    
-    AFHTTPRequestOperation *operation = [[AFHTTPRequestOperation alloc] initWithRequest:afRequest];
-    [operation  setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
-        
-        NSDictionary *responseHeaders = operation.response.allHeaderFields;
-        if (responseHeaders && [responseHeaders isKindOfClass:[NSDictionary class]]) {
-            if ([responseHeaders valueForKey:HTTP_LOCATION]) {
-                _uploadURL = [responseHeaders valueForKey:HTTP_LOCATION];
-                NSLog(@"Created resumable upload at %@ for asset URL %@", _uploadURL, _assetURL);
-                NSURL* fileURL = [self resumableUploadsFilePath];
-                NSMutableDictionary* resumableUploads = [self resumableUploads];
-                [resumableUploads setValue:_uploadURL forKey:_assetURL];
-                BOOL success = [resumableUploads writeToURL:fileURL atomically:YES];
-                if (!success) {
-                    NSLog(@"Unable to save resumableUploads file");
-                }
-                _bytesWritten = 0;
-                [self uploadFile];
-            }
-            else {
-                NSLog(@"invalid create file header response");
-            }
-        }
-        else {
-            NSLog(@"no create file header response");
-        }
-        
-	} failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-		NSLog(@"failled to create file");
-	}];
-	[operation start];
+    AFHTTPRequestOperationManager *manager = [[AFHTTPRequestOperationManager alloc] initWithBaseURL:[NSURL URLWithString:UPLOAD_URL]];
+    [manager.requestSerializer setValue:[NSString stringWithFormat:@"%llu", _assetDataLength] forHTTPHeaderField:HTTP_FINAL_LENGTH];
+    [manager.requestSerializer setValue:@"0" forHTTPHeaderField:@"Content-Length"];
+    [manager.requestSerializer setTimeoutInterval:REQUEST_TIMEOUT];
+    [manager.requestSerializer setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
+    [manager.requestSerializer setHTTPShouldHandleCookies:NO];
+    [manager POST:@""
+       parameters:nil
+          success:^(AFHTTPRequestOperation *operation, id responseObject) {
+              
+              NSDictionary *responseHeaders = operation.response.allHeaderFields;
+              if (responseHeaders && [responseHeaders isKindOfClass:[NSDictionary class]]) {
+                  if ([responseHeaders valueForKey:HTTP_LOCATION]) {
+                      _uploadURL = [responseHeaders valueForKey:HTTP_LOCATION];
+                      NSLog(@"Created resumable upload at %@ for asset URL %@", _uploadURL, _assetURL);
+                      NSURL* fileURL = [self resumableUploadsFilePath];
+                      NSMutableDictionary* resumableUploads = [self resumableUploads];
+                      [resumableUploads setValue:_uploadURL forKey:_assetURL];
+                      BOOL success = [resumableUploads writeToURL:fileURL atomically:YES];
+                      if (!success) {
+                          NSLog(@"Unable to save resumableUploads file");
+                      }
+                      _bytesWritten = 0;
+                      [self uploadFile];
+                  }
+                  else {
+                      NSLog(@"invalid create file header response");
+                  }
+              }
+              else {
+                  NSLog(@"no create file header response");
+              }
+          } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+              NSLog(@"failled to create file");
+          }];
 }
 
 - (void)checkFile {
     
-    AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:_uploadURL]];
-    NSMutableURLRequest *afRequest = [httpClient requestWithMethod:HTTP_HEAD path:_uploadURL parameters:nil];
-    [afRequest setTimeoutInterval:REQUEST_TIMEOUT];
-    [afRequest setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
-    [afRequest setHTTPShouldHandleCookies:NO];
-    
-    AFHTTPRequestOperation *operation = [[AFHTTPRequestOperation alloc] initWithRequest:afRequest];
-    [operation  setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
-        
-        if (operation.response.statusCode != 200) {
-            NSLog(@"Server responded with %i. Restarting upload", (int)operation.response.statusCode);
-            [self createFile];
-        }
-        else {
-            NSDictionary *responseHeaders = operation.response.allHeaderFields;
-            if (responseHeaders && [responseHeaders isKindOfClass:[NSDictionary class]]) {
-                if ([responseHeaders valueForKey:HTTP_OFFSET]) {
-                    NSString *rangeHeader = [responseHeaders valueForKey:HTTP_OFFSET];
-                    _uploadOffset = [rangeHeader longLongValue];
-                    NSLog(@"Resumable upload at %@ for %@ from %lld (%@)", _uploadURL, _assetURL, _uploadOffset, rangeHeader);
-                }
-                else {
-                    _uploadOffset = 0;
-                    NSLog(@"Restarting upload at %@ for %@", _uploadURL, _assetURL);
-                }
-            }
-            else {
-                _uploadOffset = 0;
-                NSLog(@"Restarting upload at %@ for %@", _uploadURL, _assetURL);
-            }
-            _bytesWritten = _uploadOffset;
-            [self uploadFile];
-        }
-        
-	} failure:^(AFHTTPRequestOperation *operation, NSError *error) {
-		NSLog(@"failled to check file");
-	}];
-	[operation start];
+    AFHTTPRequestOperationManager *manager = [[AFHTTPRequestOperationManager alloc] initWithBaseURL:[NSURL URLWithString:_uploadURL]];
+    [manager.requestSerializer setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
+    [manager.requestSerializer setHTTPShouldHandleCookies:NO];
+    [manager.requestSerializer setTimeoutInterval:REQUEST_TIMEOUT];
+    [manager HEAD:@""
+       parameters:nil
+          success:^(AFHTTPRequestOperation *operation) {
+              
+              if (operation.response.statusCode != 200) {
+                  NSLog(@"Server responded with %i. Restarting upload", (int)operation.response.statusCode);
+                  [self createFile];
+              }
+              else {
+                  NSDictionary *responseHeaders = operation.response.allHeaderFields;
+                  if (responseHeaders && [responseHeaders isKindOfClass:[NSDictionary class]]) {
+                      if ([responseHeaders valueForKey:HTTP_OFFSET]) {
+                          NSString *rangeHeader = [responseHeaders valueForKey:HTTP_OFFSET];
+                          _uploadOffset = [rangeHeader longLongValue];
+                          NSLog(@"Resumable upload at %@ for %@ from %lld (%@)", _uploadURL, _assetURL, _uploadOffset, rangeHeader);
+                      }
+                      else {
+                          _uploadOffset = 0;
+                          NSLog(@"Restarting upload at %@ for %@", _uploadURL, _assetURL);
+                      }
+                  }
+                  else {
+                      _uploadOffset = 0;
+                      NSLog(@"Restarting upload at %@ for %@", _uploadURL, _assetURL);
+                  }
+                  _bytesWritten = _uploadOffset;
+                  [self uploadFile];
+              }
+              
+          } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+              
+              NSLog(@"failled to check file");
+              [self createFile];
+          }];
 }
 
 - (void)uploadFile {
@@ -225,8 +219,9 @@
     
     _chunkData = nil;
     _chunkData = [self chunkDataForRange:chunkRange];
-    AFHTTPClient *httpClient = [[AFHTTPClient alloc] initWithBaseURL:[NSURL URLWithString:_uploadURL]];
-    NSMutableURLRequest *afRequest = [httpClient requestWithMethod:HTTP_PATCH path:_uploadURL parameters:nil];
+    
+    NSMutableURLRequest *afRequest = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:_uploadURL]];
+    [afRequest setHTTPMethod:HTTP_PATCH];
     [afRequest setTimeoutInterval:REQUEST_TIMEOUT];
     [afRequest setCachePolicy:NSURLRequestReloadIgnoringLocalCacheData];
     [afRequest setHTTPShouldHandleCookies:NO];
